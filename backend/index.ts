@@ -4,6 +4,23 @@ import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import { z } from "zod/v4";
 import { prisma } from "./db";
+import { S3Client, GetObjectCommand, PutObjectCommand } from "@aws-sdk/client-s3";
+import { getSignedUrl, S3RequestPresigner } from "@aws-sdk/s3-request-presigner";
+
+const R2_URL = "https://e21220f4758c0870ba9c388712d42ef2.r2.cloudflarestorage.com";
+const R2_ACCESS_KEY_ID = process.env.R2_ACCESS_KEY_ID!;
+const R2_ACCESS_SECRET = process.env.R2_ACCESS_SECRET!;
+
+const S3 = new S3Client({
+  region: "auto", // Required by SDK but not used by R2
+  // Provide your Cloudflare account ID
+  endpoint: R2_URL,
+  // Retrieve your S3 API credentials for your R2 bucket via API tokens (see: https://developers.cloudflare.com/r2/api/tokens)
+  credentials: {
+    accessKeyId: R2_ACCESS_KEY_ID,
+    secretAccessKey: R2_ACCESS_SECRET,
+  },
+});
 
 const app = express();
 app.use(cors());
@@ -109,6 +126,29 @@ app.post("/api/videos", async (req, res) => {
   });
   res.status(201).json(video);
 });
+
+
+app.post("/getPresignedUrl", async (req, res) => {
+
+  const videoPath = "videos/" + Math.random() + ".mp4"; // /videos/random/images/0.123123123123.mp4
+  
+  const putUrl = await getSignedUrl(
+    S3,
+    new PutObjectCommand({
+      Bucket: "youtube-100xdevs",
+      Key: videoPath,
+      ContentType: "video/mp4",
+    }),
+    { expiresIn: 3600 },
+  );
+
+  res.json({
+    putUrl,
+    finalVideoUrl: "https://pub-9ed79a211b484b3f819c6f0883e7ac3e.r2.dev/" + videoPath
+  })
+
+})
+
 
 app.listen(3000, () => {
   console.log("Server running on http://localhost:3000");
